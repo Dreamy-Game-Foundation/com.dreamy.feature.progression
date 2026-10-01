@@ -1,0 +1,20 @@
+{
+  "name": "Dreamy.Progression.Runtime",
+  "rootNamespace": "Dreamy.Progression",
+  "references": [
+    "Dreamy.Core.Runtime",
+    "Dreamy.DataConfig.Runtime",
+    "Dreamy.Datasave.Runtime",
+    "Dreamy.Economy.Runtime",
+    "Unity.Newtonsoft.Json"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": true
+}

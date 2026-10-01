@@ -1,0 +1,36 @@
+{
+  "name": "com.dreamy.feature.progression",
+  "version": "0.1.0",
+  "displayName": "Dreamy Progression",
+  "description": "Reusable sequential-level and experience-based progression with persistent idempotent advancement and optional economy rewards.",
+  "unity": "6000.0",
+  "type": "library",
+  "license": "UNLICENSED",
+  "author": {
+    "name": "Dreamy Studio"
+  },
+  "dependencies": {
+    "com.dreamy.core": "1.1.2",
+    "com.dreamy.dataconfig": "0.2.0",
+    "com.dreamy.datasave": "0.2.0",
+    "com.dreamy.feature.economy": "0.1.0",
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  },
+  "keywords": [
+    "progression",
+    "level",
+    "experience",
+    "economy",
+    "dreamy"
+  ],
+  "testables": [
+    "Tests"
+  ],
+  "samples": [
+    {
+      "displayName": "Basic Progression",
+      "description": "Skeleton JSON catalog and host integration notes for sequential or experience progression.",
+      "path": "Samples~/Basic Progression"
+    }
+  ]
+}

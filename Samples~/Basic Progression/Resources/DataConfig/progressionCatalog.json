@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "catalogId": "sample-stages",
+  "mode": "Sequential",
+  "levels": [
+    { "id": "stage-1", "level": 1 },
+    {
+      "id": "stage-2",
+      "level": 2,
+      "rewardResourceId": "currency.gold",
+      "rewardAmount": 50
+    },
+    { "id": "stage-3", "level": 3 }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "Dreamy.Progression.Runtime.Tests",
+  "rootNamespace": "Dreamy.Progression.Tests",
+  "references": [
+    "Dreamy.Progression.Runtime",
+    "Dreamy.Datasave.Runtime",
+    "Dreamy.Economy.Runtime",
+    "Unity.Newtonsoft.Json"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}
