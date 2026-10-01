@@ -1,6 +1,6 @@
 {
   "name": "com.dreamy.feature.progression",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "displayName": "Dreamy Progression",
   "description": "Reusable sequential-level and experience-based progression with persistent idempotent advancement and optional economy rewards.",
   "unity": "6000.0",

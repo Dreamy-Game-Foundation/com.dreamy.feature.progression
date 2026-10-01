@@ -9,18 +9,14 @@ namespace Dreamy.Feature.Progression.Integration
     {
         [SerializeField] private TMP_Text levelText;
         [SerializeField] private GameObject experienceRoot;
-        [SerializeField] private Slider experienceSlider;
+        [SerializeField] private Image experienceFillImage;
         [SerializeField] private TMP_Text experienceText;
 
         private IProgressionService progression;
 
         public void Bind(IProgressionService progressionService)
         {
-            if (ReferenceEquals(progression, progressionService))
-            {
-                return;
-            }
-
+            if (ReferenceEquals(progression, progressionService)) return;
             Unbind();
             progression = progressionService;
             if (progression == null)
@@ -37,34 +33,20 @@ namespace Dreamy.Feature.Progression.Integration
 
         private void Unbind()
         {
-            if (progression != null)
-            {
-                progression.ProgressChanged -= Render;
-                progression = null;
-            }
+            if (progression == null) return;
+            progression.ProgressChanged -= Render;
+            progression = null;
         }
 
         private void Render(ProgressionState state)
         {
-            if (levelText != null)
-            {
-                levelText.text = $"Level {state.CurrentLevel}/{state.MaxLevel}";
-            }
-
+            if (levelText != null) levelText.text = $"Level {state.CurrentLevel}/{state.MaxLevel}";
             bool hasExperience = state.Mode == ProgressionMode.Experience;
-            if (experienceRoot != null)
+            if (experienceRoot != null) experienceRoot.SetActive(hasExperience);
+            if (!hasExperience) return;
+            if (experienceFillImage != null)
             {
-                experienceRoot.SetActive(hasExperience);
-            }
-
-            if (!hasExperience)
-            {
-                return;
-            }
-
-            if (experienceSlider != null)
-            {
-                experienceSlider.value = state.ExperienceToNextLevel > 0
+                experienceFillImage.fillAmount = state.ExperienceToNextLevel > 0
                     ? Mathf.Clamp01((float)state.ExperienceIntoCurrentLevel / state.ExperienceToNextLevel)
                     : 1f;
             }
@@ -79,15 +61,8 @@ namespace Dreamy.Feature.Progression.Integration
 
         private void Clear()
         {
-            if (levelText != null)
-            {
-                levelText.text = string.Empty;
-            }
-
-            if (experienceRoot != null)
-            {
-                experienceRoot.SetActive(false);
-            }
+            if (levelText != null) levelText.text = string.Empty;
+            if (experienceRoot != null) experienceRoot.SetActive(false);
         }
     }
 }

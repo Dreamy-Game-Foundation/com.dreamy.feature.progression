@@ -24,8 +24,9 @@ deciding when the player has won a stage or earned experience.
 
 ## UI HUD
 
-`UI/ProgressionHud.cs` is a TMP/UGUI sample that receives the service through
-`Bind(IProgressionService)`. It renders `Level current/max`; its XP bar is only
-visible for `Experience` catalogs. Create the Canvas and prefab in the consumer
-project, then assign the serialized fields in the Inspector. The HUD never
-decides progression or writes save data, and unregisters its event on destroy.
+`UI/ProgressionHud.prefab` is a TMP/UGUI sample that receives the service through
+`Bind(IProgressionService)`. It renders `Level current/max`; its XP bar uses an
+`Image.fillAmount` and is only visible for `Experience` catalogs. Place the
+prefab under the game-owned Safe Area container, then bind it from the host
+composition root. The HUD never decides progression or writes save data, and
+unregisters its event on destroy.

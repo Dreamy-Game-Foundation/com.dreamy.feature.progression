@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- Added the `ProgressionHud` TMP/UGUI sample prefab.
+- Replaced the sample XP slider with an `Image.fillAmount` fill image.
+
 ## 0.1.0
 
 - Added sequential and experience-based persistent progression.
