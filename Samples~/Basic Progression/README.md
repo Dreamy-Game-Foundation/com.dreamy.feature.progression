@@ -1,32 +1,25 @@
 # Basic Progression
 
-This is a skeleton integration sample. It contains static configuration only;
-the consuming game owns its gameplay win condition and any UI.
+Sample của Dreamy Progression. Import từ Window > Package Manager > Dreamy Progression > Samples > Import. Unity chép nội dung vào Assets/Samples/Dreamy Progression/0.1.1/Basic Progression/.
 
-Before `IDataConfigService.InitializeAsync`, call:
+## Cấu trúc và tích hợp
 
-```csharp
-ProgressionInstaller.RegisterConfig(dataConfigService);
-```
+Giữ nguyên folder, .meta, asmdef và reference prefab khi chuyển vào project. Chỉ giữ một bản script/asmdef và một JSON cho mỗi key Resources/DataConfig. Bootstrap config/save/wallet/audio tại GameInstaller trước khi bật UI, theo [README package](../../README.md). Link tương đối này dùng trong source package; sau import, mở README package từ Package Manager.
 
-After config initialization, Datasave setup, and `IResourceWallet` registration,
-install the feature from the composition root:
+## Sử dụng và sample
 
-```csharp
-IProgressionService progression = ProgressionInstaller.Install();
-ProgressionAdvanceResult result = progression.AdvanceNext("stage-1-win");
-```
+AdvanceNext(grantId) dùng cho Sequential; GrantExperience(grantId, amount) dùng cho Experience. Retry cùng một completion phải giữ grantId. Level bắt đầu từ 1, không có khoảng trống; XP threshold tăng dần, level đầu threshold 0. Catalog/level ID quyết định save/reward; đổi catalogId khởi tạo tiến trình mới. Sample có UI/ProgressionHud.prefab: đặt dưới safe area và Bind(IProgressionService). HUD không phải UIPanel, không tự quyết định thắng màn hoặc cấp XP.
 
-`grantId` must be stable for a single gameplay completion so retries do not
-advance twice. In `Experience` mode, call `GrantExperience(grantId, amount)`
-instead. The package validates progression order; the host is responsible for
-deciding when the player has won a stage or earned experience.
 
-## UI HUD
+Assembly Dreamy.Feature.Progression.Integration.Runtime reference Dreamy.Progression.Runtime, Unity.TextMeshPro, UnityEngine.UI.
 
-`UI/ProgressionHud.prefab` is a TMP/UGUI sample that receives the service through
-`Bind(IProgressionService)`. It renders `Level current/max`; its XP bar uses an
-`Image.fillAmount` and is only visible for `Experience` catalogs. Place the
-prefab under the game-owned Safe Area container, then bind it from the host
-composition root. The HUD never decides progression or writes save data, and
-unregisters its event on destroy.
+## Addressables cho HUD/overlay
+
+ProgressionHud không phải UIPanel. Có thể đặt trực tiếp dưới Canvas và bind/initialize như hướng dẫn trên. Nếu cần tải theo yêu cầu:
+
+1. Đưa prefab của game vào Addressables Group, ví dụ UI Widgets.
+2. Đặt Address là UI/ProgressionHud.prefab và khai báo constant tương ứng trong class UIAddress.
+3. Dùng AssetLoader.LoadAsync<GameObject>(address), instantiate dưới Canvas rồi Bind hoặc Initialize với service/registry cần thiết.
+4. Destroy instance khi kết thúc, chỉ unload cache khi không còn consumer. Build content trước khi thử player.
+
+Luồng này cần Dreamy Assets và UniTask ở game. Không truyền type HUD/overlay vào PanelManager.Show<T>(), vì API đó yêu cầu UIPanel subclass.

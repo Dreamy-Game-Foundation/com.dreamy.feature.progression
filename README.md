@@ -1,40 +1,68 @@
 # Dreamy Progression
 
-Dreamy Progression provides persistent, idempotent player progression for two
-catalog modes:
+Package thuộc Dreamy Game Studio. Hướng dẫn dưới đây mô tả cấu trúc, cách cài vào project và tích hợp ở root/scene.
 
-- `Sequential`: the host calls `AdvanceNext(grantId)` after a game-defined
-  completion, such as winning a stage.
-- `Experience`: the host calls `GrantExperience(grantId, amount)` and the
-  package unlocks every reached level.
+## Cài package
 
-The feature owns catalog validation, progression state, idempotent grant IDs,
-and optional economy milestone delivery. The host owns gameplay completion,
-UI, localization, assets, and SDK integrations.
+Dùng Unity 6000.0 trở lên. Sandbox đã tham chiếu package bằng `file:../LocalPackages/com.dreamy.feature.progression`. Project khác dùng Package Manager > + > Install package from disk và chọn package.json, hoặc Git URL của repository nội bộ. Cài cả dependency Dreamy/Git vào manifest của game; version dependency không tự cấu hình registry riêng.
 
-## Installation
+Dependency trực tiếp theo package.json:
 
-Register the catalog before DataConfig initialization, then install only after
-Datasave and the persistent `IResourceWallet` are ready:
+- `com.dreamy.core` (1.1.2)
+- `com.dreamy.dataconfig` (0.2.0)
+- `com.dreamy.datasave` (0.2.0)
+- `com.dreamy.feature.economy` (0.1.0)
+- `com.unity.nuget.newtonsoft-json` (3.2.1)
+
+## Cấu trúc và asmdef
+
+| Assembly | Reference | Phạm vi |
+| --- | --- | --- |
+| `Dreamy.Progression.Runtime` | Dreamy.Core.Runtime, Dreamy.DataConfig.Runtime, Dreamy.Datasave.Runtime, Dreamy.Economy.Runtime, Unity.Newtonsoft.Json | Runtime |
+
+Trong asmdef của game, thêm assembly chứa API trực tiếp sử dụng. Code bootstrap reference thêm Core/DataConfig/Datasave/Economy theo nhu cầu; code async reference UniTask. Code gọi type sample reference assembly sample. Giữ Editor reference trong asmdef Editor-only.
+
+## Cấu trúc và trách nhiệm
+
+Runtime/Config chứa catalog; Contracts chứa service/view và adapter; Domain chứa quy tắc và state; Installation chứa installer; Persistence xử lý tiến trình lưu. Presentation (nếu có) nối service với view. Samples~ là integration được import vào Assets; game sở hữu UI, gameplay, localization và adapter SDK.
+
+## Cài service ở GameInstaller
+
+Dùng một DataConfig và Datasave dùng chung. Ghép đoạn dưới vào root async; không tạo lại các service trong panel. Cài và đăng ký IResourceWallet dùng chung trước feature; wallet giữ transaction ID ổn định.
 
 ```csharp
-ProgressionInstaller.RegisterConfig(dataConfigService);
-await dataConfigService.InitializeAsync();
+using Dreamy.Core;
+using Dreamy.DataConfig;
+using Dreamy.Progression;
 
-IProgressionService progression = ProgressionInstaller.Install();
+// dataConfig: instance root đã tạo, chưa initialize.
+ProgressionInstaller.RegisterConfig(dataConfig);
+await dataConfig.InitializeAsync(cancellationToken);
+ServiceLocator.Register<IDataConfigService>(dataConfig);
+// IDatasaveService và wallet (nếu cần) đã đăng ký trước đây.
+IProgressionService service = ProgressionInstaller.Install();
 ```
 
-`progressionCatalog.json` must contain a stable `catalogId` and levels numbered
-from 1 without gaps. Experience catalogs start at threshold 0 and use strictly
-increasing `requiredExperience`. Sequential catalogs use no experience
-thresholds.
+Với nhiều feature, gọi tất cả RegisterConfig trước một InitializeAsync, rồi mới gọi Install cho từng feature. JSON cần có đúng một Resources/DataConfig/progressionCatalog.json. Root unregister IProgressionService khi teardown; dispose presenter/subscription theo lifecycle UI.
 
-Milestone reward transaction IDs are derived from catalog and level IDs. Keep
-those IDs stable after release. A changed `catalogId` deliberately starts a new
-progression save for the configured save key.
+## Sử dụng và sample
 
-## Sample
+AdvanceNext(grantId) dùng cho Sequential; GrantExperience(grantId, amount) dùng cho Experience. Retry cùng một completion phải giữ grantId. Level bắt đầu từ 1, không có khoảng trống; XP threshold tăng dần, level đầu threshold 0. Catalog/level ID quyết định save/reward; đổi catalogId khởi tạo tiến trình mới. Sample có UI/ProgressionHud.prefab: đặt dưới safe area và Bind(IProgressionService). HUD không phải UIPanel, không tự quyết định thắng màn hoặc cấp XP.
 
-Import **Basic Progression** from Package Manager. It is a skeleton, not a
-copy-ready UI prefab. Replace its sample JSON and use the game-owned persistent
-wallet in production.
+## Import sample
+
+Mở Window > Package Manager, chọn Dreamy Progression > Samples > Import. Unity chép vào Assets/Samples/Dreamy Progression/0.1.1/. Chuyển cả folder nếu tùy biến, giữ .meta và reference prefab; không giữ bản script/asmdef hoặc Resources document trùng.
+
+- **Basic Progression**: nguồn `Samples~/Basic Progression`.
+  Assembly `Dreamy.Feature.Progression.Integration.Runtime` reference Dreamy.Progression.Runtime, Unity.TextMeshPro, UnityEngine.UI.
+
+## Addressables cho HUD/overlay
+
+ProgressionHud không phải UIPanel. Có thể đặt trực tiếp dưới Canvas và bind/initialize như hướng dẫn trên. Nếu cần tải theo yêu cầu:
+
+1. Đưa prefab của game vào Addressables Group, ví dụ UI Widgets.
+2. Đặt Address là UI/ProgressionHud.prefab và khai báo constant tương ứng trong class UIAddress.
+3. Dùng AssetLoader.LoadAsync<GameObject>(address), instantiate dưới Canvas rồi Bind hoặc Initialize với service/registry cần thiết.
+4. Destroy instance khi kết thúc, chỉ unload cache khi không còn consumer. Build content trước khi thử player.
+
+Luồng này cần Dreamy Assets và UniTask ở game. Không truyền type HUD/overlay vào PanelManager.Show<T>(), vì API đó yêu cầu UIPanel subclass.
