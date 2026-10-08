@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Dreamy.Datasave;
+using Dreamy.DataConfig;
 using Dreamy.Economy;
 using Newtonsoft.Json;
 using NUnit.Framework;
@@ -56,7 +57,7 @@ namespace Dreamy.Progression.Tests
         [Test]
         public void GrantExperience_WhenRewardFails_DoesNotPersistExperienceOrProcessTheGrant()
         {
-            FakeResourceWallet wallet = new { ShouldSucceed = false };
+            FakeResourceWallet wallet = new() { ShouldSucceed = false };
             ProgressionModel model = CreateModel(ExperienceJson, wallet, out InMemoryDatasaveService datasave);
 
             ProgressionAdvanceResult result = model.GrantExperience("match-44", 100);

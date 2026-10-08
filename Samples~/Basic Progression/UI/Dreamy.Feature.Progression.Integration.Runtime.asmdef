@@ -4,7 +4,12 @@
   "references": [
     "Dreamy.Progression.Runtime",
     "Unity.TextMeshPro",
-    "UnityEngine.UI"
+    "UnityEngine.UI",
+    "Dreamy.UI.Runtime",
+    "Dreamy.UI.Presentation",
+    "Dreamy.DataConfig.Runtime",
+    "Dreamy.Datasave.Runtime",
+    "Dreamy.Economy.Runtime"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
