@@ -10,7 +10,8 @@
     "Dreamy.DataConfig.Runtime",
     "Dreamy.Datasave.Runtime",
     "Dreamy.Economy.Runtime",
-    "UniTask"
+    "UniTask",
+    "Dreamy.Core.Runtime"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
