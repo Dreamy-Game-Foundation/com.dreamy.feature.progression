@@ -4,7 +4,9 @@
   "references": [
     "Dreamy.Progression.Runtime",
     "Unity.TextMeshPro",
-    "UnityEngine.UI"
+    "UnityEngine.UI",
+    "Dreamy.UI.Runtime",
+    "UniTask"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

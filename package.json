@@ -29,7 +29,7 @@
   "samples": [
     {
       "displayName": "Basic Progression",
-      "description": "Skeleton JSON catalog and host integration notes for sequential or experience progression.",
+      "description": "Interactive progression demo panel, HUD and JSON catalog for sequential or experience progression.",
       "path": "Samples~/Basic Progression"
     }
   ]

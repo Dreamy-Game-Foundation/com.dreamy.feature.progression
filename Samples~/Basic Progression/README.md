@@ -23,3 +23,7 @@ ProgressionHud không phải UIPanel. Có thể đặt trực tiếp dưới Can
 4. Destroy instance khi kết thúc, chỉ unload cache khi không còn consumer. Build content trước khi thử player.
 
 Luồng này cần Dreamy Assets và UniTask ở game. Không truyền type HUD/overlay vào PanelManager.Show<T>(), vì API đó yêu cầu UIPanel subclass.
+
+## Interactive demo panel
+
+`UI/ProgressionDemoPanel.prefab` contains the existing ProgressionHud plus Advance and Back controls. Instantiate under PanelManager, await Init/PostInit, call Configure(hostProgressionService), then await Show. The sample chooses Complete Stage for Sequential or Grant 100 XP for Experience, uses a fresh grant ID per deliberate click, and disables advancement at max level. Services, config and rewards remain host-owned. Requires Dreamy UI and UniTask alongside the existing sample references.
