@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add an editable feature installer that registers services and presenters with the shared UI factory.
+- Keep supplied views passive and delegate presenter lifetime to the shared host; update sample integration documentation.
+
+
 ## 0.1.1
 
 - Added the `ProgressionHud` TMP/UGUI sample prefab.

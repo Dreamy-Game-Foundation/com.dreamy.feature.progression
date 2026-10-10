@@ -5,40 +5,14 @@ using UnityEngine.UI;
 
 namespace Dreamy.Feature.Progression.Integration
 {
-    public sealed class ProgressionHud : MonoBehaviour
+    public sealed class ProgressionHud : MonoBehaviour, IProgressionView
     {
         [SerializeField] private TMP_Text levelText;
         [SerializeField] private GameObject experienceRoot;
         [SerializeField] private Image experienceFillImage;
         [SerializeField] private TMP_Text experienceText;
 
-        private IProgressionService progression;
-
-        public void Bind(IProgressionService progressionService)
-        {
-            if (ReferenceEquals(progression, progressionService)) return;
-            Unbind();
-            progression = progressionService;
-            if (progression == null)
-            {
-                Clear();
-                return;
-            }
-
-            progression.ProgressChanged += Render;
-            Render(progression.GetState());
-        }
-
-        private void OnDestroy() => Unbind();
-
-        private void Unbind()
-        {
-            if (progression == null) return;
-            progression.ProgressChanged -= Render;
-            progression = null;
-        }
-
-        private void Render(ProgressionState state)
+        public void Render(ProgressionState state)
         {
             if (levelText != null) levelText.text = $"Level {state.CurrentLevel}/{state.MaxLevel}";
             bool hasExperience = state.Mode == ProgressionMode.Experience;
@@ -59,10 +33,5 @@ namespace Dreamy.Feature.Progression.Integration
             }
         }
 
-        private void Clear()
-        {
-            if (levelText != null) levelText.text = string.Empty;
-            if (experienceRoot != null) experienceRoot.SetActive(false);
-        }
     }
 }
