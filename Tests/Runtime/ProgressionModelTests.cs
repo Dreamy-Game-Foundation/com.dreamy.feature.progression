@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Dreamy.Datasave;
 using Dreamy.DataConfig;
 using Dreamy.Economy;
@@ -99,6 +100,63 @@ namespace Dreamy.Progression.Tests
 
             Assert.That(() => config.Initialize("progressionCatalog"), Throws.TypeOf<DataConfigException>());
         }
+
+        [TestCase(0L, 1)]
+        [TestCase(99L, 1)]
+        [TestCase(100L, 2)]
+        [TestCase(101L, 2)]
+        [TestCase(219L, 2)]
+        [TestCase(220L, 3)]
+        [TestCase(221L, 3)]
+        [TestCase(360L, 4)]
+        [TestCase(7920L, 25)]
+        [TestCase(106919L, 99)]
+        [TestCase(106920L, 100)]
+        [TestCase(106921L, 100)]
+        [TestCase(2147483647L, 100)]
+        public void GrantExperience_WithIncreasingThresholds_ResolvesBoundariesWithoutMilestones(
+            long experience, int expectedLevel)
+        {
+            var wallet = new FakeResourceWallet();
+            var model = CreateModel(IncreasingThresholdJson(), wallet, out var datasave);
+            if (experience > 0) model.GrantExperience("experience", experience);
+
+            var config = JsonConvert.DeserializeObject<ProgressionCatalogConfig>(IncreasingThresholdJson());
+            config.Initialize("progressionCatalog");
+            var recreated = new ProgressionModel(config, datasave, wallet, "test-progression");
+
+            Assert.That(recreated.GetState().CurrentLevel, Is.EqualTo(expectedLevel));
+            Assert.That(recreated.GetState().TotalExperience, Is.EqualTo(experience));
+            Assert.That(wallet.Requests, Is.Empty);
+        }
+
+        [Test]
+        public void GrantExperience_WhenLongAdditionWouldOverflow_LeavesProgressAndSaveUntouched()
+        {
+            var wallet = new FakeResourceWallet();
+            var model = CreateModel(IncreasingThresholdJson(), wallet, out var datasave);
+            model.GrantExperience("near-limit", long.MaxValue - 1);
+            int saves = datasave.SaveCount;
+
+            var result = model.GrantExperience("overflow", 2);
+
+            Assert.That(result.Status, Is.EqualTo(ProgressionAdvanceStatus.InvalidGrant));
+            Assert.That(model.GetState().TotalExperience, Is.EqualTo(long.MaxValue - 1));
+            Assert.That(datasave.SaveCount, Is.EqualTo(saves));
+            Assert.That(wallet.Requests, Is.Empty);
+        }
+
+        private static string IncreasingThresholdJson() => JsonConvert.SerializeObject(new
+        {
+            catalogId = "increasing-thresholds",
+            mode = "Experience",
+            levels = Enumerable.Range(1, 100).Select(level => new
+            {
+                id = $"level-{level}",
+                level,
+                requiredExperience = 100L * (level - 1) + 10L * (level - 1) * (level - 2)
+            })
+        });
 
         private static ProgressionModel CreateModel(
             string json,
