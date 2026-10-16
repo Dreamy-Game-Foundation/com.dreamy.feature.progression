@@ -3,6 +3,7 @@ using Dreamy.Core;
 using Dreamy.DataConfig;
 using Dreamy.Datasave;
 using Dreamy.Economy;
+using Dreamy.Economy.Rewards;
 
 namespace Dreamy.Progression
 {
@@ -40,6 +41,17 @@ namespace Dreamy.Progression
         {
             ProgressionModel service = new(catalog, datasaveService, resourceWallet, saveKey);
             ServiceLocator.Register<IProgressionService>(service);
+            ServiceLocator.Register<IProgressionRewardService>(service);
+            return service;
+        }
+        public static ProgressionModel Install(
+            ProgressionCatalogConfig catalog, IDatasaveService datasaveService,
+            IRewardDeliveryGateway gateway, string saveKey = DefaultSaveKey,
+            IProgressionLegacyRewardMigration legacyMigration = null, string occurrenceId = "permanent")
+        {
+            var service = new ProgressionModel(catalog, datasaveService, gateway, saveKey, legacyMigration, occurrenceId);
+            ServiceLocator.Register<IProgressionService>(service);
+            ServiceLocator.Register<IProgressionRewardService>(service);
             return service;
         }
     }

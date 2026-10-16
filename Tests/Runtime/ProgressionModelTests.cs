@@ -3,6 +3,7 @@ using System.Linq;
 using Dreamy.Datasave;
 using Dreamy.DataConfig;
 using Dreamy.Economy;
+using Dreamy.Economy.Rewards;
 using Newtonsoft.Json;
 using NUnit.Framework;
 
@@ -21,7 +22,7 @@ namespace Dreamy.Progression.Tests
             Assert.That(result.Status, Is.EqualTo(ProgressionAdvanceStatus.Advanced));
             Assert.That(result.State.CurrentLevel, Is.EqualTo(2));
             Assert.That(wallet.Requests, Has.Count.EqualTo(1));
-            Assert.That(wallet.Requests[0].TransactionId, Is.EqualTo("progression:test-sequential:level:stage-2"));
+            Assert.That(wallet.Requests[0].TransactionId, Is.EqualTo(EntryTransaction("test-sequential", "stage-2")));
         }
 
         [Test]
@@ -51,22 +52,23 @@ namespace Dreamy.Progression.Tests
             Assert.That(result.State.CurrentLevel, Is.EqualTo(3));
             Assert.That(result.State.TotalExperience, Is.EqualTo(300));
             Assert.That(wallet.Requests, Has.Count.EqualTo(2));
-            Assert.That(wallet.Requests[0].TransactionId, Is.EqualTo("progression:test-experience:level:rank-2"));
-            Assert.That(wallet.Requests[1].TransactionId, Is.EqualTo("progression:test-experience:level:rank-3"));
+            Assert.That(wallet.Requests[0].TransactionId, Is.EqualTo(EntryTransaction("test-experience", "rank-2")));
+            Assert.That(wallet.Requests[1].TransactionId, Is.EqualTo(EntryTransaction("test-experience", "rank-3")));
         }
 
         [Test]
-        public void GrantExperience_WhenRewardFails_DoesNotPersistExperienceOrProcessTheGrant()
+        public void GrantExperience_WhenRewardFails_CommitsExperienceAndPendingReward()
         {
             FakeResourceWallet wallet = new() { ShouldSucceed = false };
             ProgressionModel model = CreateModel(ExperienceJson, wallet, out InMemoryDatasaveService datasave);
 
             ProgressionAdvanceResult result = model.GrantExperience("match-44", 100);
 
-            Assert.That(result.Status, Is.EqualTo(ProgressionAdvanceStatus.RewardGrantFailed));
-            Assert.That(result.State.TotalExperience, Is.EqualTo(0));
-            Assert.That(model.GetState().CurrentLevel, Is.EqualTo(1));
-            Assert.That(datasave.SaveCount, Is.EqualTo(1));
+            Assert.That(result.Status, Is.EqualTo(ProgressionAdvanceStatus.ExperienceGranted));
+            Assert.That(result.State.TotalExperience, Is.EqualTo(100));
+            Assert.That(model.GetState().CurrentLevel, Is.EqualTo(2));
+            Assert.That(model.GetRewardStates()[0].Status, Is.EqualTo(ProgressionRewardStatus.Pending));
+            Assert.That(model.GrantExperience("match-44", 100).Status, Is.EqualTo(ProgressionAdvanceStatus.AlreadyProcessed));
         }
 
         [Test]
@@ -181,7 +183,10 @@ namespace Dreamy.Progression.Tests
             "{\"id\":\"rank-2\",\"level\":2,\"requiredExperience\":100,\"rewardResourceId\":\"currency.gold\",\"rewardAmount\":50}," +
             "{\"id\":\"rank-3\",\"level\":3,\"requiredExperience\":300,\"rewardResourceId\":\"currency.gems\",\"rewardAmount\":5}]}";
 
-        private sealed class FakeResourceWallet : IResourceWallet
+        private static string EntryTransaction(string catalog, string level) => RewardIdentity.EntryTransaction(
+            RewardIdentity.Request("test-progression", "progression", catalog, "permanent", level), "legacy");
+
+        private sealed class FakeResourceWallet : IResourceWallet, IRewardDestination
         {
             public List<ResourceGrantRequest> Requests { get; } = new();
             public bool ShouldSucceed { get; set; } = true;
@@ -193,29 +198,34 @@ namespace Dreamy.Progression.Tests
             }
 
             public bool TryExchange(ResourceExchangeRequest request) => false;
+            public string KindId => "currency";
+            public RewardDeliveryResult Validate(IReadOnlyList<RewardDeliveryRequest> requests) => RewardDeliveryResult.Delivered();
+            public RewardDeliveryResult Deliver(RewardDeliveryRequest request) => TryGrant(new ResourceGrantRequest(
+                request.TransactionId, new ResourceAmount(new ResourceId(request.Entry.TargetId), request.Entry.Amount)))
+                ? RewardDeliveryResult.Delivered() : RewardDeliveryResult.Pending(RewardDeliveryReason.DestinationUnavailable);
         }
 
         private sealed class InMemoryDatasaveService : IDatasaveService
         {
-            private readonly Dictionary<string, SaveData> data = new();
+            private readonly Dictionary<string, string> data = new();
 
             public int SaveCount { get; private set; }
 
             public T Load<T>(string key = null) where T : SaveData, new()
             {
-                if (data.TryGetValue(key, out SaveData saved))
+                if (data.TryGetValue(key, out string saved))
                 {
-                    return (T)saved;
+                    return JsonConvert.DeserializeObject<T>(saved);
                 }
 
                 T created = new();
-                data[key] = created;
+                data[key] = JsonConvert.SerializeObject(created);
                 return created;
             }
 
             public void Save<T>(T saved, string key = null) where T : SaveData
             {
-                data[key] = saved;
+                data[key] = JsonConvert.SerializeObject(saved);
                 SaveCount++;
             }
 

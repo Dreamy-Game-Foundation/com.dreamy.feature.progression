@@ -1,0 +1,262 @@
+{
+  "catalogId": "demo-ranks",
+  "mode": "Experience",
+  "levels": [
+    {
+      "id": "rank-1",
+      "level": 1,
+      "requiredExperience": 0
+    },
+    {
+      "id": "rank-2",
+      "level": 2,
+      "requiredExperience": 100,
+      "bundle": {
+        "schemaVersion": 1,
+        "resolverVersion": "progression-static-v1",
+        "entries": [
+          {
+            "entryId": "coins",
+            "kindId": "currency",
+            "targetId": "currency.coin",
+            "amount": 100
+          },
+          {
+            "entryId": "gems",
+            "kindId": "currency",
+            "targetId": "currency.gem",
+            "amount": 5
+          },
+          {
+            "entryId": "card",
+            "kindId": "card",
+            "targetId": "card.knight",
+            "amount": 2
+          },
+          {
+            "entryId": "chest",
+            "kindId": "chest",
+            "targetId": "chest.silver",
+            "amount": 1
+          },
+          {
+            "entryId": "skin",
+            "kindId": "cosmetic",
+            "targetId": "skin.hero.red",
+            "amount": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "rank-3",
+      "level": 3,
+      "requiredExperience": 200,
+      "bundle": {
+        "schemaVersion": 1,
+        "resolverVersion": "progression-static-v1",
+        "entries": [
+          {
+            "entryId": "coins",
+            "kindId": "currency",
+            "targetId": "currency.coin",
+            "amount": 100
+          },
+          {
+            "entryId": "gems",
+            "kindId": "currency",
+            "targetId": "currency.gem",
+            "amount": 5
+          },
+          {
+            "entryId": "card",
+            "kindId": "card",
+            "targetId": "card.knight",
+            "amount": 2
+          },
+          {
+            "entryId": "chest",
+            "kindId": "chest",
+            "targetId": "chest.silver",
+            "amount": 1
+          },
+          {
+            "entryId": "skin",
+            "kindId": "cosmetic",
+            "targetId": "skin.hero.red",
+            "amount": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "rank-4",
+      "level": 4,
+      "requiredExperience": 300
+    },
+    {
+      "id": "rank-5",
+      "level": 5,
+      "requiredExperience": 400,
+      "bundle": {
+        "schemaVersion": 1,
+        "resolverVersion": "progression-static-v1",
+        "entries": [
+          {
+            "entryId": "coins",
+            "kindId": "currency",
+            "targetId": "currency.coin",
+            "amount": 100
+          },
+          {
+            "entryId": "gems",
+            "kindId": "currency",
+            "targetId": "currency.gem",
+            "amount": 5
+          },
+          {
+            "entryId": "card",
+            "kindId": "card",
+            "targetId": "card.knight",
+            "amount": 2
+          },
+          {
+            "entryId": "chest",
+            "kindId": "chest",
+            "targetId": "chest.silver",
+            "amount": 1
+          },
+          {
+            "entryId": "skin",
+            "kindId": "cosmetic",
+            "targetId": "skin.hero.red",
+            "amount": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "rank-6",
+      "level": 6,
+      "requiredExperience": 500,
+      "bundle": {
+        "schemaVersion": 1,
+        "resolverVersion": "progression-static-v1",
+        "entries": [
+          {
+            "entryId": "coins",
+            "kindId": "currency",
+            "targetId": "currency.coin",
+            "amount": 100
+          },
+          {
+            "entryId": "gems",
+            "kindId": "currency",
+            "targetId": "currency.gem",
+            "amount": 5
+          },
+          {
+            "entryId": "card",
+            "kindId": "card",
+            "targetId": "card.knight",
+            "amount": 2
+          },
+          {
+            "entryId": "chest",
+            "kindId": "chest",
+            "targetId": "chest.silver",
+            "amount": 1
+          },
+          {
+            "entryId": "skin",
+            "kindId": "cosmetic",
+            "targetId": "skin.hero.red",
+            "amount": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "rank-7",
+      "level": 7,
+      "requiredExperience": 600,
+      "bundle": {
+        "schemaVersion": 1,
+        "resolverVersion": "progression-static-v1",
+        "entries": [
+          {
+            "entryId": "coins",
+            "kindId": "currency",
+            "targetId": "currency.coin",
+            "amount": 100
+          },
+          {
+            "entryId": "gems",
+            "kindId": "currency",
+            "targetId": "currency.gem",
+            "amount": 5
+          },
+          {
+            "entryId": "card",
+            "kindId": "card",
+            "targetId": "card.knight",
+            "amount": 2
+          },
+          {
+            "entryId": "chest",
+            "kindId": "chest",
+            "targetId": "chest.silver",
+            "amount": 1
+          },
+          {
+            "entryId": "skin",
+            "kindId": "cosmetic",
+            "targetId": "skin.hero.red",
+            "amount": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "rank-8",
+      "level": 8,
+      "requiredExperience": 700,
+      "bundle": {
+        "schemaVersion": 1,
+        "resolverVersion": "progression-static-v1",
+        "entries": [
+          {
+            "entryId": "coins",
+            "kindId": "currency",
+            "targetId": "currency.coin",
+            "amount": 100
+          },
+          {
+            "entryId": "gems",
+            "kindId": "currency",
+            "targetId": "currency.gem",
+            "amount": 5
+          },
+          {
+            "entryId": "card",
+            "kindId": "card",
+            "targetId": "card.knight",
+            "amount": 2
+          },
+          {
+            "entryId": "chest",
+            "kindId": "chest",
+            "targetId": "chest.silver",
+            "amount": 1
+          },
+          {
+            "entryId": "skin",
+            "kindId": "cosmetic",
+            "targetId": "skin.hero.red",
+            "amount": 1
+          }
+        ]
+      }
+    }
+  ]
+}

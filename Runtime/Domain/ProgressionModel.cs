@@ -2,246 +2,241 @@ using System;
 using System.Collections.Generic;
 using Dreamy.Datasave;
 using Dreamy.Economy;
+using Dreamy.Economy.Rewards;
 
 namespace Dreamy.Progression
 {
-    public sealed class ProgressionModel : IProgressionService
+    public sealed partial class ProgressionModel : IProgressionService, IProgressionRewardService
     {
-        private const int DefaultProcessedGrantHistoryLimit = 4096;
-
         private readonly ProgressionCatalogConfig catalog;
         private readonly IDatasaveService datasave;
-        private readonly IResourceWallet resourceWallet;
+        private readonly IRewardDeliveryGateway gateway;
+        private readonly IProgressionLegacyRewardMigration legacyMigration;
         private readonly string saveKey;
-        private readonly int processedGrantHistoryLimit;
-        private readonly ProgressionSaveData save;
-        private readonly HashSet<string> processedGrantIds = new(StringComparer.Ordinal);
-        private readonly List<string> processedGrantHistory = new();
+        private readonly string occurrenceId;
+        private ProgressionSaveData save;
+        private bool busy;
+        private bool publishing;
+        public bool RequiresReload { get; private set; }
+        public bool RequiresMigration { get; private set; }
 
-        public ProgressionModel(
-            ProgressionCatalogConfig catalog,
-            IDatasaveService datasave,
-            IResourceWallet resourceWallet,
-            string saveKey,
-            int processedGrantHistoryLimit = DefaultProcessedGrantHistoryLimit)
+        // Kept for source compatibility. Grant IDs are now retained without truncation.
+        // A bool-only wallet cannot provide durable per-entry delivery guarantees.
+        public ProgressionModel(ProgressionCatalogConfig catalog, IDatasaveService datasave,
+            IResourceWallet resourceWallet, string saveKey, int processedGrantHistoryLimit = 4096)
+            : this(catalog, datasave, GatewayFor(resourceWallet, processedGrantHistoryLimit), saveKey)
+        {
+        }
+
+        public ProgressionModel(ProgressionCatalogConfig catalog, IDatasaveService datasave,
+            IRewardDeliveryGateway gateway, string saveKey,
+            IProgressionLegacyRewardMigration legacyMigration = null, string occurrenceId = "permanent")
         {
             this.catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
             this.datasave = datasave ?? throw new ArgumentNullException(nameof(datasave));
-            this.resourceWallet = resourceWallet ?? throw new ArgumentNullException(nameof(resourceWallet));
-            this.saveKey = string.IsNullOrWhiteSpace(saveKey)
-                ? throw new ArgumentException("Save key cannot be empty.", nameof(saveKey))
-                : saveKey;
-            if (processedGrantHistoryLimit <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(processedGrantHistoryLimit));
-            }
-
-            this.processedGrantHistoryLimit = processedGrantHistoryLimit;
-            save = datasave.Load<ProgressionSaveData>(saveKey);
-            InitializeForCatalog();
-            LoadProcessedGrantIds();
+            this.gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
+            this.saveKey = !string.IsNullOrWhiteSpace(saveKey) ? saveKey : throw new ArgumentException("Save key is required.", nameof(saveKey));
+            this.occurrenceId = !string.IsNullOrWhiteSpace(occurrenceId) ? occurrenceId : throw new ArgumentException("Occurrence is required.", nameof(occurrenceId));
+            this.legacyMigration = legacyMigration;
+            catalog.Initialize("progressionCatalog");
+            Load();
         }
 
         public event Action<ProgressionState> ProgressChanged;
-
+        public event Action RewardsChanged;
+        public event Action<Exception> NotificationFailed;
         public ProgressionState GetState() => CreateState();
 
-        public ProgressionAdvanceResult AdvanceNext(string grantId)
-        {
-            ProgressionState state = CreateState();
-            if (catalog.Mode != ProgressionMode.Sequential)
-            {
-                return ProgressionAdvanceResult.WrongMode(state);
-            }
+        public ProgressionAdvanceResult AdvanceNext(string grantId) => Advance(grantId, 0, ProgressionMode.Sequential);
+        public ProgressionAdvanceResult GrantExperience(string grantId, long amount) => Advance(grantId, amount, ProgressionMode.Experience);
 
-            if (!IsGrantIdValid(grantId))
-            {
+        private ProgressionAdvanceResult Advance(string grantId, long amount, ProgressionMode mode)
+        {
+            var state = CreateState();
+            if (busy || publishing) return ProgressionAdvanceResult.Rejected(ProgressionAdvanceStatus.Busy, state);
+            if (RequiresReload) return ProgressionAdvanceResult.Rejected(ProgressionAdvanceStatus.RecoveryRequired, state);
+            if (RequiresMigration) return ProgressionAdvanceResult.Rejected(ProgressionAdvanceStatus.MigrationRequired, state);
+            if (catalog.Mode != mode) return ProgressionAdvanceResult.WrongMode(state);
+            if (string.IsNullOrWhiteSpace(grantId)) return ProgressionAdvanceResult.InvalidGrant(state);
+            if (save.ProcessedGrantIds.Contains(grantId)) return ProgressionAdvanceResult.AlreadyProcessed(state);
+            if (mode == ProgressionMode.Experience && (amount <= 0 || save.TotalExperience > long.MaxValue - amount))
                 return ProgressionAdvanceResult.InvalidGrant(state);
-            }
-
-            if (processedGrantIds.Contains(grantId))
+            if (mode == ProgressionMode.Sequential && state.IsMaxLevel) return ProgressionAdvanceResult.MaxLevel(state);
+            busy = true;
+            try
             {
-                return ProgressionAdvanceResult.AlreadyProcessed(state);
-            }
-
-            if (state.IsMaxLevel)
-            {
-                return ProgressionAdvanceResult.MaxLevel(state);
-            }
-
-            ProgressionLevelEntry nextLevel = catalog.Levels[save.CurrentLevelIndex + 1];
-            if (!TryGrantReward(nextLevel))
-            {
-                return ProgressionAdvanceResult.RewardGrantFailed(state);
-            }
-
-            save.CurrentLevelIndex++;
-            AddProcessedGrantId(grantId);
-            Save();
-            ProgressionState updatedState = CreateState();
-            ProgressChanged?.Invoke(updatedState);
-            return ProgressionAdvanceResult.Advanced(updatedState, 1);
-        }
-
-        public ProgressionAdvanceResult GrantExperience(string grantId, long amount)
-        {
-            ProgressionState state = CreateState();
-            if (catalog.Mode != ProgressionMode.Experience)
-            {
-                return ProgressionAdvanceResult.WrongMode(state);
-            }
-
-            if (!IsGrantIdValid(grantId) || amount <= 0 || save.TotalExperience > long.MaxValue - amount)
-            {
-                return ProgressionAdvanceResult.InvalidGrant(state);
-            }
-
-            if (processedGrantIds.Contains(grantId))
-            {
-                return ProgressionAdvanceResult.AlreadyProcessed(state);
-            }
-
-            long updatedExperience = save.TotalExperience + amount;
-            int targetLevelIndex = ResolveLevelIndex(updatedExperience);
-            for (int index = save.CurrentLevelIndex + 1; index <= targetLevelIndex; index++)
-            {
-                if (!TryGrantReward(catalog.Levels[index]))
+                var candidate = save.Clone();
+                long xp = mode == ProgressionMode.Experience ? candidate.TotalExperience + amount : 0;
+                int target = mode == ProgressionMode.Experience ? ResolveLevelIndex(xp, candidate.Levels) : candidate.CurrentLevelIndex + 1;
+                int advanced = target - candidate.CurrentLevelIndex;
+                for (int i = candidate.CurrentLevelIndex + 1; i <= target; i++)
                 {
-                    return ProgressionAdvanceResult.RewardGrantFailed(state);
+                    var level = catalog.Levels[i];
+                    if (!level.HasReward) continue;
+                    var bundle = level.GetBundle();
+                    var record = new ProgressionMilestoneReward
+                    {
+                        MilestoneId = level.Id, Level = level.Level,
+                        BundleSchemaVersion = bundle.SchemaVersion, ResolverVersion = bundle.ResolverVersion,
+                        RequiresLegacyReconciliation = candidate.LegacyHistory
+                    };
+                    foreach (var entry in bundle.Entries)
+                        record.Payload.Add(new RewardJournalEntry
+                        { EntryId = entry.EntryId, KindId = entry.KindId, TargetId = entry.TargetId, Amount = entry.Amount });
+                    string requestId = RequestId(record.MilestoneId);
+                    // Stage all coordinator intents into this one progression candidate.
+                    var staged = new RewardDeliveryCoordinator(gateway).Begin(requestId,
+                        Fingerprint(requestId, bundle), journal => record.Journal = journal.Clone());
+                    if (!staged.IsSuccess) throw new InvalidOperationException("Could not stage milestone intent.");
+                    candidate.MilestoneRewards.Add(record);
                 }
+                candidate.TotalExperience = xp;
+                candidate.CurrentLevelIndex = target;
+                candidate.ProcessedGrantIds.Add(grantId);
+                try { Commit(candidate); }
+                catch (Exception) { return ProgressionAdvanceResult.Rejected(ProgressionAdvanceStatus.PersistenceFailed, state); }
+                var updated = CreateState();
+                NotifyProgress(updated);
+                NotifyRewards();
+                // Delivery failure never changes the durable advancement outcome.
+                RetryPendingCore();
+                return mode == ProgressionMode.Experience
+                    ? ProgressionAdvanceResult.ExperienceGranted(updated, advanced)
+                    : ProgressionAdvanceResult.Advanced(updated, advanced);
             }
-
-            int levelsAdvanced = targetLevelIndex - save.CurrentLevelIndex;
-            save.TotalExperience = updatedExperience;
-            save.CurrentLevelIndex = targetLevelIndex;
-            AddProcessedGrantId(grantId);
-            Save();
-            ProgressionState updatedState = CreateState();
-            ProgressChanged?.Invoke(updatedState);
-            return ProgressionAdvanceResult.ExperienceGranted(updatedState, levelsAdvanced);
+            finally { busy = false; NotifyRewards(); }
         }
 
-        private void InitializeForCatalog()
+        public void Reload()
         {
-            if (!string.Equals(save.CatalogId, catalog.CatalogId, StringComparison.Ordinal))
-            {
-                save.CatalogId = catalog.CatalogId;
-                save.CurrentLevelIndex = 0;
-                save.TotalExperience = 0;
-                save.ProcessedGrantIds.Clear();
-                datasave.Save(save, saveKey);
-            }
-
-            int maxIndex = catalog.Levels.Count - 1;
-            if (save.CurrentLevelIndex < 0 || save.CurrentLevelIndex > maxIndex || save.TotalExperience < 0)
-            {
-                save.CurrentLevelIndex = 0;
-                save.TotalExperience = 0;
-                save.ProcessedGrantIds.Clear();
-                datasave.Save(save, saveKey);
-            }
-
-            if (catalog.Mode == ProgressionMode.Experience)
-            {
-                int resolvedIndex = ResolveLevelIndex(save.TotalExperience);
-                if (save.CurrentLevelIndex != resolvedIndex)
-                {
-                    save.CurrentLevelIndex = resolvedIndex;
-                    datasave.Save(save, saveKey);
-                }
-            }
+            if (busy || publishing) throw new InvalidOperationException("Progression is busy.");
+            busy = true;
+            try { RequiresReload = true; Load(); NotifyProgress(CreateState()); NotifyRewards(); }
+            finally { busy = false; NotifyRewards(); }
         }
 
-        private void LoadProcessedGrantIds()
+        private void Load()
         {
-            foreach (string grantId in save.ProcessedGrantIds)
+            var loaded = datasave.Load<ProgressionSaveData>(saveKey);
+            loaded.OnAfterLoad();
+            var candidate = loaded.Clone();
+            bool initialize = candidate.Levels.Count == 0;
+            bool fresh = string.IsNullOrEmpty(candidate.CatalogId);
+            if (initialize)
             {
-                if (!string.IsNullOrWhiteSpace(grantId) && processedGrantIds.Add(grantId))
-                {
-                    processedGrantHistory.Add(grantId);
-                }
+                if (!fresh && !candidate.LegacyHistory)
+                    throw new InvalidOperationException("Missing v2 level snapshot; host recovery required.");
+                if (!fresh && candidate.CatalogId != catalog.CatalogId)
+                    throw new InvalidOperationException("Legacy catalog mismatch requires host migration.");
+                if (!fresh) { candidate.LegacyHistory = true; candidate.LegacyReachedLevelIndex = candidate.CurrentLevelIndex; }
+                candidate.CatalogId = catalog.CatalogId;
+                candidate.Mode = catalog.Mode;
+                candidate.OccurrenceId = occurrenceId;
+                foreach (var level in catalog.Levels)
+                    candidate.Levels.Add(new ProgressionLevelSnapshot
+                    { Id = level.Id, Level = level.Level, RequiredExperience = level.RequiredExperience });
             }
+            ValidateSave(candidate);
+            bool compatible = candidate.CatalogId == catalog.CatalogId && candidate.Mode == catalog.Mode &&
+                candidate.OccurrenceId == occurrenceId && candidate.Levels.Count == catalog.Levels.Count;
+            if (compatible)
+                for (int i = 0; i < candidate.Levels.Count; i++)
+                    compatible &= candidate.Levels[i].Id == catalog.Levels[i].Id &&
+                        candidate.Levels[i].RequiredExperience == catalog.Levels[i].RequiredExperience;
+            if (initialize) Commit(candidate);
+            else save = candidate;
+            RequiresMigration = !compatible;
+            RequiresReload = false;
         }
 
-        private int ResolveLevelIndex(long totalExperience)
+        private static void ValidateSave(ProgressionSaveData candidate)
         {
-            int resolvedIndex = 0;
-            for (int index = 1; index < catalog.Levels.Count; index++)
+            if (!Enum.IsDefined(typeof(ProgressionMode), candidate.Mode) || string.IsNullOrWhiteSpace(candidate.OccurrenceId) ||
+                candidate.CurrentLevelIndex < 0 || candidate.CurrentLevelIndex >= candidate.Levels.Count || candidate.TotalExperience < 0)
+                throw new InvalidOperationException("Invalid Progression save; host recovery required.");
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            long previous = -1;
+            for (int i = 0; i < candidate.Levels.Count; i++)
             {
-                if (catalog.Levels[index].RequiredExperience > totalExperience)
-                {
-                    break;
-                }
-
-                resolvedIndex = index;
+                var level = candidate.Levels[i];
+                if (level == null || string.IsNullOrWhiteSpace(level.Id) || !ids.Add(level.Id) || level.Level != i + 1 ||
+                    level.RequiredExperience < 0 || (candidate.Mode == ProgressionMode.Experience && level.RequiredExperience <= previous) ||
+                    (candidate.Mode == ProgressionMode.Sequential && level.RequiredExperience != 0))
+                    throw new InvalidOperationException("Invalid saved level structure.");
+                previous = level.RequiredExperience;
             }
-
-            return resolvedIndex;
+            if (candidate.Mode == ProgressionMode.Experience && (candidate.Levels[0].RequiredExperience != 0 ||
+                ResolveLevelIndex(candidate.TotalExperience, candidate.Levels) != candidate.CurrentLevelIndex))
+                throw new InvalidOperationException("Saved XP and level disagree; explicit migration required.");
+            ids.Clear();
+            foreach (var record in candidate.MilestoneRewards)
+                if (record == null || string.IsNullOrWhiteSpace(record.MilestoneId) || !ids.Add(record.MilestoneId))
+                    throw new InvalidOperationException("Invalid milestone records.");
         }
 
-        private bool TryGrantReward(ProgressionLevelEntry level)
+        private void Commit(ProgressionSaveData candidate)
         {
-            if (!level.HasReward)
-            {
-                return true;
-            }
-
-            string transactionId = $"progression:{catalog.CatalogId}:level:{level.Id}";
-            return resourceWallet.TryGrant(new ResourceGrantRequest(transactionId, level.Reward));
+            try { datasave.Save(candidate, saveKey); }
+            catch (Exception) { RequiresReload = true; throw; }
+            save = candidate;
         }
 
-        private void AddProcessedGrantId(string grantId)
+        private string RequestId(string milestoneId) => RewardIdentity.Request(saveKey, "progression", save.CatalogId, save.OccurrenceId, milestoneId);
+        private static string Fingerprint(string requestId, ResolvedRewardBundle bundle) =>
+            RewardIdentity.Fingerprint("progression-milestone", requestId, bundle.Fingerprint);
+
+        private static int ResolveLevelIndex(long experience, IReadOnlyList<ProgressionLevelSnapshot> levels)
         {
-            processedGrantIds.Add(grantId);
-            processedGrantHistory.Add(grantId);
-        }
-
-        private void Save()
-        {
-            int firstRetainedIndex = Math.Max(0, processedGrantHistory.Count - processedGrantHistoryLimit);
-            save.ProcessedGrantIds.Clear();
-            for (int index = firstRetainedIndex; index < processedGrantHistory.Count; index++)
-            {
-                save.ProcessedGrantIds.Add(processedGrantHistory[index]);
-            }
-
-            if (firstRetainedIndex > 0)
-            {
-                processedGrantIds.Clear();
-                processedGrantHistory.Clear();
-                LoadProcessedGrantIds();
-            }
-
-            datasave.Save(save, saveKey);
+            int index = 0;
+            while (index + 1 < levels.Count && levels[index + 1].RequiredExperience <= experience) index++;
+            return index;
         }
 
         private ProgressionState CreateState()
         {
-            ProgressionLevelEntry currentLevel = catalog.Levels[save.CurrentLevelIndex];
-            long totalExperience = catalog.Mode == ProgressionMode.Experience
-                ? save.TotalExperience
-                : 0;
-            long experienceIntoCurrentLevel = 0;
-            long experienceToNextLevel = 0;
-            if (catalog.Mode == ProgressionMode.Experience &&
-                save.CurrentLevelIndex < catalog.Levels.Count - 1)
-            {
-                long currentThreshold = currentLevel.RequiredExperience;
-                long nextThreshold = catalog.Levels[save.CurrentLevelIndex + 1].RequiredExperience;
-                experienceIntoCurrentLevel = save.TotalExperience - currentThreshold;
-                experienceToNextLevel = nextThreshold - currentThreshold;
-            }
-
-            return new ProgressionState(
-                catalog.Mode,
-                currentLevel.Id,
-                currentLevel.Level,
-                catalog.Levels[catalog.Levels.Count - 1].Level,
-                totalExperience,
-                experienceIntoCurrentLevel,
-                experienceToNextLevel);
+            var current = save.Levels[save.CurrentLevelIndex];
+            bool experience = save.Mode == ProgressionMode.Experience;
+            bool hasNext = save.CurrentLevelIndex + 1 < save.Levels.Count;
+            return new ProgressionState(save.Mode, current.Id, current.Level, save.Levels.Count,
+                experience ? save.TotalExperience : 0,
+                experience && hasNext ? save.TotalExperience - current.RequiredExperience : 0,
+                experience && hasNext ? save.Levels[save.CurrentLevelIndex + 1].RequiredExperience - current.RequiredExperience : 0);
         }
 
-        private static bool IsGrantIdValid(string grantId) => !string.IsNullOrWhiteSpace(grantId);
+        private void NotifyProgress(ProgressionState state)
+        {
+            if (ProgressChanged == null) return;
+            foreach (Action<ProgressionState> listener in ProgressChanged.GetInvocationList())
+                try { listener(state); } catch (Exception exception) { Report(exception); }
+        }
+        private void NotifyRewards()
+        {
+            if (RewardsChanged == null) return;
+            bool previous = publishing;
+            publishing = true;
+            try
+            {
+                foreach (Action listener in RewardsChanged.GetInvocationList())
+                    try { listener(); } catch (Exception exception) { Report(exception); }
+            }
+            finally { publishing = previous; }
+        }
+        private void Report(Exception exception)
+        { try { NotificationFailed?.Invoke(exception); } catch (Exception) { } }
+
+        private static IRewardDeliveryGateway GatewayFor(IResourceWallet wallet, int processedGrantHistoryLimit)
+        {
+            if (processedGrantHistoryLimit <= 0) throw new ArgumentOutOfRangeException(nameof(processedGrantHistoryLimit));
+            if (wallet == null) throw new ArgumentNullException(nameof(wallet));
+            return wallet is IRewardDestination destination
+                ? new RewardDeliveryGateway(new[] { destination }) : new UnavailableGateway();
+        }
+        private sealed class UnavailableGateway : IRewardDeliveryGateway
+        {
+            public RewardDeliveryResult Validate(string id, string fingerprint, ResolvedRewardBundle bundle) =>
+                RewardDeliveryResult.Pending(RewardDeliveryReason.DestinationUnavailable);
+            public RewardDeliveryResult Deliver(RewardDeliveryRequest request) =>
+                RewardDeliveryResult.Pending(RewardDeliveryReason.DestinationUnavailable);
+        }
     }
 }

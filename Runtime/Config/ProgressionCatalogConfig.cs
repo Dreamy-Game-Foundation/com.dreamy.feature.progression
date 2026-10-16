@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Dreamy.DataConfig;
 using Dreamy.Economy;
+using Dreamy.Economy.Rewards;
 using Newtonsoft.Json;
 
 namespace Dreamy.Progression
@@ -86,11 +87,14 @@ namespace Dreamy.Progression
         [JsonProperty("requiredExperience")]
         private long requiredExperience;
 
-        [JsonProperty("rewardResourceId")]
+        [JsonProperty("rewardResourceId", NullValueHandling = NullValueHandling.Ignore)]
         private string rewardResourceId;
 
-        [JsonProperty("rewardAmount")]
-        private long rewardAmount;
+        [JsonProperty("bundle", Required = Required.DisallowNull, NullValueHandling = NullValueHandling.Ignore)]
+        private ProgressionRewardBundleConfig bundle;
+
+        [JsonProperty("rewardAmount", NullValueHandling = NullValueHandling.Ignore)]
+        private long? rewardAmount;
 
         [JsonIgnore]
         public string Id => id;
@@ -102,10 +106,19 @@ namespace Dreamy.Progression
         public long RequiredExperience => requiredExperience;
 
         [JsonIgnore]
-        public bool HasReward => !string.IsNullOrWhiteSpace(rewardResourceId);
+        public bool HasReward => bundle != null || !string.IsNullOrWhiteSpace(rewardResourceId);
 
         [JsonIgnore]
-        public ResourceAmount Reward => new(new ResourceId(rewardResourceId), rewardAmount);
+        public bool IsBundle => bundle != null;
+
+        public ResolvedRewardBundle GetBundle() => bundle != null ? bundle.Resolve() :
+            new ResolvedRewardBundle(1, "progression-legacy-v1", new[]
+            { new ResolvedRewardEntry("legacy", "currency", rewardResourceId, rewardAmount.Value) });
+
+        [JsonIgnore]
+        public ResourceAmount Reward => !IsBundle && HasReward
+            ? new ResourceAmount(new ResourceId(rewardResourceId), rewardAmount.Value)
+            : throw new InvalidOperationException("Use GetBundle for bundled rewards.");
 
         internal void Validate(
             string documentName,
@@ -141,14 +154,23 @@ namespace Dreamy.Progression
                 throw new DataConfigException(documentName, "Experience thresholds must strictly increase.");
             }
 
-            if (HasReward)
+            if (bundle != null)
             {
-                if (!ResourceId.TryParse(rewardResourceId, out _) || rewardAmount <= 0)
+                if (rewardResourceId != null || rewardAmount.HasValue)
+                    throw new DataConfigException(documentName, $"Level '{id}' mixes bundle and legacy fields.");
+                try { bundle.Resolve(); }
+                catch (ArgumentException exception)
+                { throw new DataConfigException(documentName, $"Level '{id}' has invalid bundle: {exception.Message}"); }
+                return;
+            }
+            if (!string.IsNullOrWhiteSpace(rewardResourceId))
+            {
+                if (!ResourceId.TryParse(rewardResourceId, out _) || !rewardAmount.HasValue || rewardAmount.Value <= 0)
                 {
                     throw new DataConfigException(documentName, $"Level '{id}' has invalid reward data.");
                 }
             }
-            else if (rewardAmount != 0)
+            else if (rewardAmount.GetValueOrDefault() != 0)
             {
                 throw new DataConfigException(documentName, $"Level '{id}' has rewardAmount without rewardResourceId.");
             }

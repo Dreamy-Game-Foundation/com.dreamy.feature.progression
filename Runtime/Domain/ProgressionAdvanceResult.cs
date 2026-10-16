@@ -33,6 +33,9 @@ namespace Dreamy.Progression
         internal static ProgressionAdvanceResult InvalidGrant(ProgressionState state) =>
             new(ProgressionAdvanceStatus.InvalidGrant, state, 0);
 
+        internal static ProgressionAdvanceResult Rejected(ProgressionAdvanceStatus status, ProgressionState state) =>
+            new(status, state, 0);
+
         internal static ProgressionAdvanceResult RewardGrantFailed(ProgressionState state) =>
             new(ProgressionAdvanceStatus.RewardGrantFailed, state, 0);
     }
@@ -45,6 +48,10 @@ namespace Dreamy.Progression
         MaxLevel,
         WrongMode,
         InvalidGrant,
-        RewardGrantFailed
+        RewardGrantFailed,
+        PersistenceFailed,
+        RecoveryRequired,
+        MigrationRequired,
+        Busy
     }
 }

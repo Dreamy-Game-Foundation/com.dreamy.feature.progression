@@ -1,0 +1,7 @@
+{
+  "name": "Dreamy.Progression.Rewards.Sample",
+  "rootNamespace": "Dreamy.Progression.Samples",
+  "references": ["Dreamy.Progression.Runtime", "Dreamy.Datasave.Runtime", "Dreamy.Economy.Runtime", "Dreamy.DataConfig.Runtime"],
+  "autoReferenced": true,
+  "noEngineReferences": false
+}
