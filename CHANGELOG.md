@@ -22,7 +22,7 @@
 - Add a persistent five-kind reward sample with failure injection and domain/disk regression tests.
 - Require Economy 0.4.0; reject incompatible catalog structure instead of silently resetting progress.
 
-## Earlier unreleased work
+## Historical installer work (included in 0.1.2 and later)
 
 - Add an editable feature installer that registers services and presenters with the shared UI factory.
 - Keep supplied views passive and delegate presenter lifetime to the shared host; update sample integration documentation.
